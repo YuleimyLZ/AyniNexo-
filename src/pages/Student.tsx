@@ -1,9 +1,10 @@
 import { ArrowRight, Bookmark, Check, Clock, X } from 'lucide-react'
 import { useId, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { ActionLink, Button, CategoryIcon, DemoNote, EmptyState, PageIntro, Status } from '../components/ui'
-import { deadlineStatus, formatDate, normalize } from '../features/eligibility'
+import { formatDate, normalize, opportunityStatus } from '../features/eligibility'
+import { userMessage } from '../services/validation'
 import { useWorkspace } from '../services/workspaceContext'
 import { academicLevels, englishLevels, fundingOptions, savedStatuses } from '../types/domain'
 import type { Profile as AcademicProfile, SavedStatus } from '../types/domain'
@@ -29,9 +30,11 @@ function TagField({ label, values, onChange, placeholder }: { label: string; val
 }
 
 export function Profile() {
-  const { workspace, update } = useWorkspace()
+  const { workspace, saveProfile, role } = useWorkspace()
   const [profile, setProfile] = useState(workspace.profile)
   const [saved, setSaved] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
   const complete = Object.values(profile).filter((value) => Array.isArray(value) ? value.length > 0 : typeof value === 'string' ? value.trim() : value !== null).length
   const total = Object.keys(profile).length
   const percentage = Math.round(complete / total * 100)
@@ -41,14 +44,24 @@ export function Profile() {
     setProfile((previous) => ({ ...previous, [key]: value }))
   }
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault()
-    update((previous) => ({ ...previous, profile }))
-    setSaved(true)
+    if (busy) return
+    setBusy(true)
+    setError('')
+    setSaved(false)
+    try {
+      await saveProfile(profile)
+      setSaved(true)
+    } catch (cause) {
+      setError(userMessage(cause, 'No pudimos guardar tu perfil.'))
+    } finally {
+      setBusy(false)
+    }
   }
 
   return <div className="container subpage narrow">
-    <PageIntro label="Mi perfil" title={<>Comparte lo que <em>te mueve.</em></>}>Tu perfil académico ayuda a identificar oportunidades y próximos pasos. Puedes completar solo lo que quieras compartir en este navegador.</PageIntro>
+    <PageIntro label="Mi perfil" title={<>Comparte lo que <em>te mueve.</em></>}>Tu perfil académico ayuda a identificar oportunidades y próximos pasos. Puedes completar solo los campos que quieras guardar en tu cuenta.</PageIntro>
     <div className="surface profile-progress"><div><strong>Perfil completado</strong><span>{complete} de {total} campos</span></div><progress value={complete} max={total} aria-label="Perfil completado" /><strong>{percentage}%</strong></div>
     <form className="stacked-form" onSubmit={submit}>
       <fieldset className="surface"><legend>Formación académica</legend><div className="form-grid">
@@ -62,77 +75,108 @@ export function Profile() {
       <fieldset className="surface"><legend>Intereses y experiencia</legend><div className="form-grid">
         <TagField label="Habilidades técnicas" values={profile.skills} onChange={(value) => setField('skills', value)} placeholder="Ej. Python" />
         <TagField label="Intereses" values={profile.interests} onChange={(value) => setField('interests', value)} placeholder="Ej. Ciencia de datos" />
-        <label className="field field--wide"><span>Objetivos profesionales</span><textarea value={profile.goals} maxLength={500} onChange={(event) => setField('goals', event.target.value)} /></label>
-        <label className="field"><span>Experiencia en proyectos</span><textarea value={profile.projects} maxLength={500} onChange={(event) => setField('projects', event.target.value)} /></label>
-        <label className="field"><span>Experiencia en investigación</span><textarea value={profile.research} maxLength={500} onChange={(event) => setField('research', event.target.value)} /></label>
+        <label className="field field--wide"><span>Objetivos profesionales</span><textarea aria-label="Objetivos profesionales" value={profile.goals} maxLength={500} onChange={(event) => setField('goals', event.target.value)} /></label>
+        <label className="field"><span>Experiencia en proyectos</span><textarea aria-label="Experiencia en proyectos" value={profile.projects} maxLength={500} onChange={(event) => setField('projects', event.target.value)} /></label>
+        <label className="field"><span>Experiencia en investigación</span><textarea aria-label="Experiencia en investigación" value={profile.research} maxLength={500} onChange={(event) => setField('research', event.target.value)} /></label>
       </div></fieldset>
       <fieldset className="surface"><legend>Preferencias</legend><div className="form-grid">
         <SelectField label="Financiamiento" value={profile.funding} options={fundingOptions} onChange={(value) => setField('funding', value as AcademicProfile['funding'])} />
         <SelectField label="Disponibilidad para viajar" value={profile.travel} options={['Sí', 'No']} onChange={(value) => setField('travel', value as AcademicProfile['travel'])} />
         <div className="field--wide"><TagField label="Destinos de interés" values={profile.destinations} onChange={(value) => setField('destinations', value)} placeholder="Ej. Perú" /></div>
       </div></fieldset>
-      <div className="action-row"><Button type="submit">Guardar mi perfil <ArrowRight size={17} /></Button>{saved && <span className="confirmation" role="status"><Check size={17} /> Perfil guardado en este navegador</span>}</div>
+      <div className="action-row"><Button type="submit" disabled={busy}>{busy ? 'Guardando…' : 'Guardar mi perfil'} <ArrowRight size={17} /></Button>{saved && <span className="confirmation" role="status"><Check size={17} /> Perfil guardado</span>}</div>
+      {error && <p role="alert" className="error-text">{error}</p>}
     </form>
-    {workspace.session && <div className="profile-session"><ActionLink to="/sesion" variant="text">Gestionar sesión de demostración</ActionLink></div>}
+    <div className="profile-session action-row">
+      <ActionLink to="/sesion" variant="text">Gestionar mi sesión</ActionLink>
+      {role === 'owner' && <ActionLink to="/administracion" variant="outline">Administración</ActionLink>}
+    </div>
   </div>
 }
 
 export function Saved() {
-  const { catalog, workspace, update } = useWorkspace()
-  const items = catalog.filter((item) => workspace.saved[item.id])
+  const { catalog, catalogState, workspace, setSaved, reloadCatalog } = useWorkspace()
+  const [busy, setBusy] = useState('')
+  const [error, setError] = useState('')
+  const items = Object.entries(workspace.saved)
+
+  async function change(id: string, status: SavedStatus | null) {
+    if (busy) return
+    setBusy(id)
+    setError('')
+    try {
+      await setSaved(id, status)
+    } catch (cause) {
+      setError(userMessage(cause, 'No pudimos actualizar tus guardadas.'))
+    } finally {
+      setBusy('')
+    }
+  }
+
   return <div className="container subpage">
     <PageIntro label="Mis oportunidades" title={<>Todo lo que quieres <em>intentar.</em></>}>Organiza tus oportunidades guardadas y sigue el estado de cada una.</PageIntro>
-    {items.length ? <div className="saved-list">{items.map((item) => <article className="surface saved-row" key={item.id}>
-      <CategoryIcon category={item.category} />
-      <div><h2>{item.status === 'Archivada' ? item.title : <Link to={`/oportunidades/${item.id}`}>{item.title}</Link>}</h2><p>{item.organization} · {formatDate(item.deadline)}</p></div>
-      <Status>{item.status === 'Archivada' ? item.status : deadlineStatus(item.deadline)}</Status>
-      <select aria-label={`Progreso de ${item.title}`} value={workspace.saved[item.id]} onChange={(event) => {
-        const status = event.target.value as SavedStatus
-        update((previous) => ({ ...previous, saved: { ...previous.saved, [item.id]: status } }))
-      }}>{savedStatuses.map((status) => <option key={status}>{status}</option>)}</select>
-      <Button variant="text" aria-label={`Quitar ${item.title} de guardadas`} onClick={() => update((previous) => {
-        const saved = { ...previous.saved }
-        delete saved[item.id]
-        return { ...previous, saved }
-      })}><Bookmark size={18} fill="currentColor" /></Button>
-    </article>)}</div> : <EmptyState title="Todavía no tienes oportunidades guardadas" action={<ActionLink to="/explorar" arrow>Explorar oportunidades</ActionLink>}>Guarda una convocatoria en el explorador para encontrarla aquí.</EmptyState>}
+    {error && <p className="error-text" role="alert">{error}</p>}
+    {catalogState === 'error' && <div className="action-row"><p role="alert">No pudimos consultar las convocatorias.</p><Button variant="outline" onClick={reloadCatalog}>Reintentar</Button></div>}
+    {catalogState === 'loading' && items.length > 0 && <p className="state-message" role="status">Cargando convocatorias…</p>}
+    {items.length > 0 && catalogState === 'ready' && <div className="saved-list">{items.map(([id, tracking]) => {
+      const item = catalog.find((opportunity) => opportunity.id === id)
+      const name = item?.title ?? 'Convocatoria no disponible'
+      return <article className="surface saved-row" key={id}>
+        {item ? <CategoryIcon category={item.category} /> : <span className="icon-tile tone-rose"><Bookmark size={19} aria-hidden="true" /></span>}
+        <div><h2>{item ? <Link to={`/oportunidades/${id}`}>{name}</Link> : name}</h2>{item && <p>{item.organization} · {formatDate(item.deadline)}</p>}</div>
+        <Status>{item ? opportunityStatus(item) : 'No disponible'}</Status>
+        <select aria-label={`Progreso de ${name}`} value={tracking} disabled={!item || Boolean(busy)} onChange={(event) => void change(id, event.target.value as SavedStatus)}>
+          {savedStatuses.map((status) => <option key={status}>{status}</option>)}
+        </select>
+        <Button variant="text" aria-label={`Quitar ${name} de guardadas`} disabled={Boolean(busy)} onClick={() => void change(id, null)}><Bookmark size={18} fill="currentColor" /></Button>
+      </article>
+    })}</div>}
+    {items.length === 0 && <EmptyState title="Todavía no tienes oportunidades guardadas" action={<ActionLink to="/explorar" arrow>Explorar oportunidades</ActionLink>}>Guarda una convocatoria en el explorador para encontrarla aquí.</EmptyState>}
   </div>
 }
 
 export function Roadmap() {
-  const { catalog, workspace, update } = useWorkspace()
+  const { catalog, catalogState, workspace, completeAction } = useWorkspace()
   const [query, setQuery] = useSearchParams()
-  const current = workspace.roadmaps.find((item) => item.id === query.get('oportunidad')) ?? workspace.roadmaps[0]
+  const [busy, setBusy] = useState('')
+  const [error, setError] = useState('')
+  const current = workspace.roadmaps.find((item) => item.opportunityId === query.get('oportunidad')) ?? workspace.roadmaps[0]
   const completed = current?.actions.filter((item) => item.completed).length ?? 0
-  const opportunity = catalog.find((item) => item.id === current?.id)
+  const opportunity = catalog.find((item) => item.id === current?.opportunityId)
+  const state = opportunity ? opportunityStatus(opportunity) : catalogState === 'ready' ? 'No disponible' : 'Por confirmar'
+
+  async function complete(id: string, checked: boolean) {
+    if (busy || !current) return
+    setBusy(id)
+    setError('')
+    try {
+      await completeAction(current.id, id, checked)
+    } catch (cause) {
+      setError(userMessage(cause, 'No pudimos actualizar el avance.'))
+    } finally {
+      setBusy('')
+    }
+  }
+
   return <div className="container subpage narrow">
     <PageIntro label="Mi ruta" title={<>Construye tu camino <em>paso a paso.</em></>}>Una ruta de preparación para organizar tus próximos pasos y registrar tu avance.</PageIntro>
     {current ? <>
-      <DemoNote>Ruta de demostración generada mediante reglas.</DemoNote>
-      <div className="surface roadmap-summary"><label className="field"><span>Tu oportunidad</span><select value={current.id} onChange={(event) => setQuery({ oportunidad: event.target.value })}>{workspace.roadmaps.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
-      <div><Status>{opportunity?.status === 'Archivada' ? 'Archivada' : deadlineStatus(opportunity?.deadline ?? null)}</Status><p>{completed} de {current.actions.length} acciones completadas</p></div><progress aria-label="Acciones completadas" value={completed} max={current.actions.length} /></div>
-      {opportunity && (opportunity.status === 'Archivada' || deadlineStatus(opportunity.deadline) === 'Vencida') && <p className="quiet">Esta ruta sirve para prepararte para futuras convocatorias similares.</p>}
+      <DemoNote>{current.origin === 'deterministic' ? 'Ruta de preparación generada mediante reglas.' : 'Ruta de preparación generada con asistencia de IA.'}</DemoNote>
+      <div className="surface roadmap-summary">
+        <label className="field"><span>Tu oportunidad</span><select aria-label="Tu oportunidad" value={current.opportunityId} onChange={(event) => setQuery({ oportunidad: event.target.value })}>
+          {workspace.roadmaps.map((item) => <option key={item.id} value={item.opportunityId}>{item.title}</option>)}
+        </select></label>
+        <div><Status>{state}</Status><p>{completed} de {current.actions.length} acciones completadas</p></div>
+        <progress aria-label="Acciones completadas" value={completed} max={current.actions.length} />
+      </div>
+      {['Vencida', 'Cerrada', 'No disponible'].includes(state) && <p className="quiet">Esta ruta sirve para prepararte para futuras convocatorias similares.</p>}
+      {error && <p className="error-text" role="alert">{error}</p>}
       <ol className="timeline">{current.actions.map((action) => <li className={`surface timeline-action ${action.completed ? 'timeline-action--done' : ''}`} key={action.id}>
         <div className="timeline-meta"><span className="chip">Prioridad {action.priority.toLowerCase()}</span><span><Clock size={15} /> {action.duration}</span></div>
         <h2>{action.title}</h2><p>{action.description}</p>{action.requirement && <p className="quiet"><strong>Requisito</strong> · {action.requirement}</p>}
         {action.resources?.map((resource) => <a key={resource.url} className="inline-link" href={resource.url} target="_blank" rel="noreferrer">{resource.label}</a>)}
-        <label className="check-field"><input type="checkbox" checked={action.completed} onChange={(event) => {
-          const checked = event.currentTarget.checked
-          update((previous) => ({ ...previous, roadmaps: previous.roadmaps.map((item) => item.id === current.id ? { ...item, actions: item.actions.map((entry) => entry.id === action.id ? { ...entry, completed: checked } : entry) } : item) }))
-        }} />{action.completed ? 'Completada' : 'Marcar como completada'}</label>
+        <label className="check-field"><input type="checkbox" checked={action.completed} disabled={Boolean(busy)} onChange={(event) => void complete(action.id, event.currentTarget.checked)} />{action.completed ? 'Completada' : 'Marcar como completada'}</label>
       </li>)}</ol>
-    </> : <EmptyState title="Todavía no tienes una ruta" action={<ActionLink to="/explorar" arrow>Elegir una oportunidad</ActionLink>}>Abre el detalle de una oportunidad y elige Generar mi ruta con IA para comenzar.</EmptyState>}
-  </div>
-}
-
-export function Session() {
-  const { workspace, update } = useWorkspace()
-  const navigate = useNavigate()
-  return <div className="container subpage narrow"><PageIntro label="Mi cuenta" title={<>Crea tu espacio <em>en AyniNexo.</em></>}>Prueba el perfil académico y las herramientas de preparación en este navegador.</PageIntro>
-    <div className="surface simple-panel"><DemoNote>La sesión de demostración funciona sin correo ni contraseña.</DemoNote>
-    <div className="action-row"><Button onClick={() => {
-      update((previous) => ({ ...previous, session: !previous.session }))
-      navigate(workspace.session ? '/' : '/perfil')
-    }}>{workspace.session ? 'Cerrar sesión de demostración' : 'Iniciar sesión de demostración'} <ArrowRight size={17} /></Button></div></div>
+    </> : <EmptyState title="Todavía no tienes una ruta" action={<ActionLink to="/explorar" arrow>Elegir una oportunidad</ActionLink>}>Abre el detalle de una oportunidad y elige Generar mi ruta para comenzar.</EmptyState>}
   </div>
 }

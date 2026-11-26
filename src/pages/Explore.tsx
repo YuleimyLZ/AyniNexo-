@@ -2,7 +2,7 @@ import { Search, SlidersHorizontal, X } from 'lucide-react'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Button, DemoNote, EmptyState, OpportunityCard, PageIntro } from '../components/ui'
-import { deadlineStatus, normalize } from '../features/eligibility'
+import { opportunityStatus, normalize } from '../features/eligibility'
 import { useWorkspace } from '../services/workspaceContext'
 import { academicLevels, categories, fundingOptions, modalities } from '../types/domain'
 
@@ -11,7 +11,7 @@ type Filter = { key: string; label: string; placeholder: string; options: readon
 export function Explore() {
   const [params, setParams] = useSearchParams()
   const [showFilters, setShowFilters] = useState(false)
-  const { catalog, catalogState, reloadCatalog } = useWorkspace()
+  const { catalog, catalogState, reloadCatalog, mode } = useWorkspace()
   const approved = catalog.filter((item) => item.status === 'Aprobada')
   const countries = Array.from(new Set(approved.map((item) => item.country))).sort((a, b) => a.localeCompare(b, 'es'))
   const filters: Filter[] = [
@@ -20,14 +20,14 @@ export function Explore() {
     { key: 'modalidad', label: 'Modalidad', placeholder: 'Todas las modalidades', options: modalities },
     { key: 'financiamiento', label: 'Financiamiento', placeholder: 'Cualquier financiamiento', options: fundingOptions },
     { key: 'nivel', label: 'Nivel académico', placeholder: 'Todos los niveles', options: academicLevels },
-    { key: 'plazo', label: 'Fecha límite', placeholder: 'Todos los plazos', options: ['Abierta', 'Vencida', 'Por confirmar'] },
+    { key: 'plazo', label: 'Fecha límite', placeholder: 'Todos los plazos', options: ['Abierta', 'Vencida', 'Cerrada', 'Por confirmar'] },
   ]
   const search = params.get('q') ?? ''
   const sort = params.get('orden') ?? 'relevancia'
   const activeFilters = filters.filter(({ key }) => params.has(key))
   const tokens = normalize(search).split(/\s+/).filter(Boolean)
   const results = approved.filter((item) => {
-    const values = [item.category, item.country, item.modality, item.funding, item.levels, deadlineStatus(item.deadline)]
+    const values = [item.category, item.country, item.modality, item.funding, item.levels, opportunityStatus(item)]
     const text = normalize([item.title, item.organization, item.description, ...item.topics, ...values.flat()].join(' '))
     return tokens.every((term) => text.includes(term)) && filters.every(({ key }, index) => {
       const value = params.get(key)
@@ -40,7 +40,7 @@ export function Explore() {
       const relevance = titleScore(second.title) - titleScore(first.title)
       if (relevance) return relevance
     }
-    return Number(deadlineStatus(first.deadline) === 'Vencida') - Number(deadlineStatus(second.deadline) === 'Vencida')
+    return Number(['Vencida', 'Cerrada'].includes(opportunityStatus(first))) - Number(['Vencida', 'Cerrada'].includes(opportunityStatus(second)))
   })
 
   function setFilter(key: string, value: string, replace = false) {
@@ -70,7 +70,7 @@ export function Explore() {
         </div>
       </section>
       <div className="container explorer">
-        <DemoNote />
+        {mode === 'demo' && <DemoNote />}
         <div className="catalog-layout">
           <aside className={`filter-panel ${showFilters ? 'filters-visible' : ''}`} aria-label="Filtros de oportunidades">
             <button className="filter-toggle button button--outline" type="button" aria-expanded={showFilters} aria-controls="filter-controls" onClick={() => setShowFilters(!showFilters)}><SlidersHorizontal size={17} />Filtros{activeFilters.length > 0 ? ` (${activeFilters.length})` : ''}</button>
@@ -86,8 +86,10 @@ export function Explore() {
             </div>
             {activeFilters.length > 0 && <div className="active-filters">{activeFilters.map(({ key, label }) => <button className="chip chip--filter" key={key} type="button" onClick={() => setFilter(key, '')} aria-label={`Quitar filtro ${label}: ${params.get(key)}`}>{params.get(key)} <X size={14} /></button>)}</div>}
             {catalogState === 'loading' && <p role="status" className="state-message">Cargando oportunidades…</p>}
-            {catalogState === 'error' && <EmptyState title="No pudimos cargar el catálogo" action={<Button onClick={reloadCatalog}>Reintentar</Button>}>Intenta cargar las oportunidades de nuevo.</EmptyState>}
-            {catalogState === 'ready' && (results.length ? <div className="card-grid">{results.map((item) => <OpportunityCard key={item.id} opportunity={item} />)}</div> : <EmptyState title="No encontramos coincidencias" action={<Button variant="outline" onClick={() => setParams({})}>Restablecer búsqueda</Button>}>Prueba otra palabra o quita un filtro para ampliar la búsqueda.</EmptyState>)}
+            {catalogState === 'error' && (mode === 'setup'
+              ? <EmptyState title="Conexión pendiente">El catálogo estará disponible cuando se configure Supabase.</EmptyState>
+              : <EmptyState title="No pudimos cargar el catálogo" action={<Button onClick={reloadCatalog}>Reintentar</Button>}>Comprueba tu conexión e inténtalo de nuevo.</EmptyState>)}
+            {catalogState === 'ready' && (results.length ? <div className="card-grid">{results.map((item) => <OpportunityCard key={item.id} opportunity={item} />)}</div> : approved.length === 0 ? <EmptyState title="Tu próxima oportunidad empieza aquí">Aún no hay convocatorias publicadas. Cuando la comunidad comparta nuevas oportunidades y se revisen, las verás en este espacio.</EmptyState> : <EmptyState title="No encontramos coincidencias" action={<Button variant="outline" onClick={() => setParams({})}>Restablecer búsqueda</Button>}>Prueba otra palabra o quita un filtro para ampliar la búsqueda.</EmptyState>)}
           </section>
         </div>
       </div>

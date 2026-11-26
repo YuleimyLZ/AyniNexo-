@@ -1,7 +1,9 @@
 import { ArrowRight, Award, BookOpen, Bookmark, BriefcaseBusiness, CalendarDays, CodeXml, Compass, FlaskConical, GraduationCap, HeartHandshake, MapPin, Mic, Monitor, Sparkles, UsersRound, Wallet } from 'lucide-react'
+import { useState } from 'react'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
-import { Link } from 'react-router-dom'
-import { deadlineStatus, formatDate } from '../features/eligibility'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { opportunityStatus, formatDate } from '../features/eligibility'
+import { userMessage } from '../services/validation'
 import { useWorkspace } from '../services/workspaceContext'
 import type { Category, Opportunity } from '../types/domain'
 
@@ -42,7 +44,7 @@ export function PageIntro({ label, title, children, icon }: { label: string; tit
 }
 
 export function Status({ children }: { children: string }) {
-  const tone = ['Cumplido', 'Abierta', 'Aprobada', 'Finalizada'].includes(children) ? 'sage' : ['Vencida', 'No cumplido', 'Rechazada', 'Archivada'].includes(children) ? 'rose' : 'sand'
+  const tone = ['Cumplido', 'Abierta', 'Aprobada', 'Finalizada'].includes(children) ? 'sage' : ['Vencida', 'Cerrada', 'No cumplido', 'Rechazada', 'Archivada'].includes(children) ? 'rose' : 'sand'
   return <span className={`status tone-${tone}`}><span aria-hidden="true" />{children}</span>
 }
 
@@ -52,21 +54,38 @@ export function CategoryIcon({ category, size = 22 }: { category: Category; size
 }
 
 export function SaveButton({ opportunity, compact = false }: { opportunity: Opportunity; compact?: boolean }) {
-  const { workspace, update } = useWorkspace()
+  const { workspace, session, setSaved, authState, studentState } = useWorkspace()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
   const saved = Boolean(workspace.saved[opportunity.id])
-  function toggle() {
-    update((previous) => {
-      const next = { ...previous.saved }
-      if (next[opportunity.id]) delete next[opportunity.id]
-      else next[opportunity.id] = 'Guardada'
-      return { ...previous, saved: next }
-    })
+
+  async function toggle() {
+    if (!session) {
+      navigate('/sesion', { state: { returnTo: location.pathname + location.search } })
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      await setSaved(opportunity.id, saved ? null : 'Guardada')
+    } catch (cause) {
+      setError(userMessage(cause, 'No pudimos actualizar tus guardadas.'))
+    } finally {
+      setBusy(false)
+    }
   }
+
   return (
-    <button className={compact ? 'bookmark-button' : 'button button--outline'} type="button" aria-label={`Guardar ${opportunity.title}`} aria-pressed={saved} onClick={toggle}>
-      <Bookmark size={19} fill={saved ? 'currentColor' : 'none'} strokeWidth={1.7} />
-      {!compact && (saved ? 'Guardada' : 'Guardar oportunidad')}
-    </button>
+    <div className={compact ? 'save-control save-control--compact' : 'save-control'}>
+      <button className={compact ? 'bookmark-button' : 'button button--outline'} type="button"
+        aria-label={`Guardar ${opportunity.title}`} aria-pressed={saved} disabled={busy || authState === 'loading' || Boolean(session && studentState !== 'ready')} onClick={() => void toggle()}>
+        <Bookmark size={19} fill={saved ? 'currentColor' : 'none'} strokeWidth={1.7} />
+        {!compact && (saved ? 'Guardada' : 'Guardar oportunidad')}
+      </button>
+      {error && <p className="save-error error-text" role="alert">{error}</p>}
+    </div>
   )
 }
 
@@ -86,7 +105,7 @@ export function OpportunityCard({ opportunity }: { opportunity: Opportunity }) {
         <span><Monitor size={15} />{opportunity.modality}</span>
         <span><Wallet size={15} />{opportunity.funding}</span>
       </div>
-      <div className="card-date"><span><CalendarDays size={15} />{formatDate(opportunity.deadline)}</span><Status>{opportunity.status === 'Archivada' ? 'Archivada' : deadlineStatus(opportunity.deadline)}</Status></div>
+      <div className="card-date"><span><CalendarDays size={15} />{formatDate(opportunity.deadline)}</span><Status>{opportunity.status === 'Archivada' ? 'Archivada' : opportunityStatus(opportunity)}</Status></div>
       <Link className="card-link" to={`/oportunidades/${opportunity.id}`}>Ver oportunidad <ArrowRight size={16} aria-hidden="true" /></Link>
     </article>
   )

@@ -27,7 +27,7 @@ export const emptyProfile: Profile = {
   skills: [], interests: [], goals: '', projects: '', research: '', funding: '', travel: '', destinations: [],
 }
 
-export type Requirement = { id: string; label: string; mandatory: boolean } & (
+export type Requirement = { id: string; label: string; mandatory: boolean; source?: string; unit?: string } & (
   | { kind: 'cycle'; minimum: number; whenLevel?: typeof academicLevels[number] }
   | { kind: 'english'; minimum: typeof englishLevels[number] }
   | { kind: 'certificate' | 'travel' | 'manual' }
@@ -53,11 +53,13 @@ export type Opportunity = {
   topics: string[]
   requirements: Requirement[]
   status: 'Aprobada' | 'Archivada'
+  closed?: boolean
+  updatedAt?: string
 }
 
 export const savedStatuses = ['Guardada', 'Me interesa', 'En preparación', 'Postulé', 'Finalizada'] as const
 export type SavedStatus = typeof savedStatuses[number]
-export type SubmissionStatus = 'Pendiente' | 'En revisión' | 'Aprobada' | 'Rechazada'
+export type SubmissionStatus = 'Pendiente' | 'En revisión' | 'Aprobada' | 'Rechazada' | 'Archivada'
 export type Submission = {
   id: string
   source: string
@@ -66,6 +68,9 @@ export type Submission = {
   comment: string
   status: SubmissionStatus
   submittedAt: string
+  reviewedAt?: string
+  publishedOpportunityId?: string
+  moderatorNote?: string
 }
 
 export type RequirementStatus = 'Cumplido' | 'Pendiente' | 'No cumplido' | 'Por confirmar'
@@ -74,9 +79,10 @@ export type RoadmapAction = {
   title: string
   description: string
   requirement?: string
+  requirementId?: string
   priority: 'Alta' | 'Media'
   duration: string
   resources?: { label: string; url: string }[]
   completed: boolean
 }
-export type Roadmap = { id: string; title: string; actions: RoadmapAction[] }
+export type Roadmap = { id: string; opportunityId: string; title: string; origin: 'deterministic' | 'ai'; actions: RoadmapAction[] }

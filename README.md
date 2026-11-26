@@ -1,44 +1,42 @@
 # AyniNexo
 
-AyniNexo acerca oportunidades educativas y profesionales a estudiantes universitarios. Es un proyecto independiente nacido en Perú. Esta **Public Beta v0.1, Fase 1** es una demostración del frontend, con convocatorias ficticias, datos locales y recomendaciones por reglas.
+AyniNexo acerca oportunidades educativas y profesionales a estudiantes universitarios. Es un proyecto independiente nacido en Perú. La Fase 2 de la Public Beta v0.1 conecta el frontend Rosewood con Supabase Auth y PostgreSQL.
 
-## Ejecución local
+## Configuración desde el navegador
 
-Necesitas Node.js 22.12 o posterior (recomendado Node.js 24) y npm.
+La guía cubre la migración en SQL Editor, las variables de Codex Web, la cuenta Owner y una comprobación del flujo de aportes. [Configurar el proyecto de Supabase](docs/configuracion-supabase.md)
+
+| Ruta | Experiencia |
+| --- | --- |
+| `/`, `/explorar` | Portada y catálogo público de convocatorias aprobadas |
+| `/oportunidades/:id`, `/mi-nexo` | Fuente, requisitos y orientación determinística |
+| `/sesion` | Registro, confirmación de correo, sesión y recuperación |
+| `/perfil`, `/guardadas`, `/mi-ruta` | Datos y progreso de la cuenta autenticada |
+| `/compartir` | Envío de oportunidades y seguimiento de los aportes propios |
+| `/administracion` | Revisión, creación, edición, publicación y archivo por la persona Owner |
+
+El catálogo real empieza vacío. Mi Nexo aplica reglas determinísticas a convocatorias aprobadas. La extracción y las recomendaciones generativas corresponden a la Fase 3.
+
+## Desarrollo y pruebas
+
+Para trabajar dentro de un entorno de ejecución se recomienda Node.js 22.12 o posterior.
 
 ```sh
 npm ci
 npm run dev
-```
-
-Abre [localhost:5173](http://localhost:5173). Si Vite usa otro puerto, el terminal mostrará la URL correspondiente.
-
-| Ruta | Experiencia |
-| --- | --- |
-| `/` | Portada, categorías, oportunidades destacadas e historia |
-| `/explorar` | Búsqueda, seis filtros, orden, guardado y detalle |
-| `/mi-nexo` | Objetivos, afinidad y recomendaciones explicadas |
-| `/perfil`, `/guardadas`, `/mi-ruta` | Perfil y progreso en este navegador |
-| `/compartir` | Formulario de aportes |
-| `/admin-demo` | Revisión, extracción simulada, edición, aprobación y archivo |
-
-Para ver un ejemplo de brechas, entra a **Mi Nexo IA**, marca **Usar perfil de ejemplo** y elige el objetivo sobre un intercambio en tercer ciclo. En el detalle puedes comparar el perfil que guardaste y generar una ruta.
-
-El almacenamiento se conserva por origen y navegador. La sesión de demostración y el panel administrativo son simulaciones. No hay cuentas reales, autenticación, Supabase, Gemini ni verificación de las oportunidades de ejemplo.
-
-## Verificación
-
-```sh
 npm run lint
 npm test
 npm run build
-npm run preview
 ```
 
-`npm run preview` sirve la compilación local. Consulta la URL que imprime el terminal.
+En desarrollo, puedes configurar `VITE_AYNI_DEMO=true` con las dos variables de Supabase vacías para explorar un catálogo ficticio identificado. Las operaciones que requieren una cuenta se habilitan al conectar Supabase. Los datos de la Fase 1 permanecen separados de esta base.
 
 ## Documentación
 
-- [Arquitectura e integraciones futuras](docs/arquitectura.md)
-- [Sistema de diseño y procedencia de la imagen](docs/diseno.md)
-- [Capturas de escritorio y móvil](docs/capturas/README.md)
+- [Arquitectura](docs/arquitectura.md)
+- [Migraciones](docs/migraciones.md)
+- [Seguridad y roles](docs/seguridad-y-roles.md)
+- [Pruebas](docs/pruebas.md)
+- [Roadmap del proyecto](docs/roadmap.md)
+- [Sistema visual](docs/diseno.md)
+- [Capturas de referencia de la Fase 1](docs/capturas/README.md)

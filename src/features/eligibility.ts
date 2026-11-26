@@ -12,6 +12,10 @@ export function deadlineStatus(deadline: string | null, today = todayInPeru()) {
   return deadline < today ? 'Vencida' : 'Abierta'
 }
 
+export function opportunityStatus(opportunity: Pick<Opportunity, 'closed' | 'deadline'>) {
+  return opportunity.closed ? 'Cerrada' : deadlineStatus(opportunity.deadline)
+}
+
 export function assessRequirement(requirement: Requirement, profile: Profile): RequirementStatus {
   switch (requirement.kind) {
     case 'cycle':
@@ -60,6 +64,7 @@ function objectiveTerms(goal: string) {
 export function recommend(goal: string, profile: Profile, catalog: Opportunity[]) {
   const terms = objectiveTerms(`${goal} ${profile.interests.join(' ')}`)
   return catalog.filter((opportunity) => opportunity.status === 'Aprobada' && deadlineStatus(opportunity.deadline) !== 'Vencida')
+    .filter((opportunity) => !opportunity.closed)
     .map((opportunity) => {
       const attributes = normalize([opportunity.title, opportunity.category, opportunity.country, opportunity.funding, ...opportunity.topics].join(' '))
       const words = new Set(attributes.split(/[^a-z0-9]+/))
@@ -94,12 +99,15 @@ export function createRoadmap(opportunity: Opportunity, profile: Profile): Roadm
       title: preparation[requirement.kind][0],
       description: preparation[requirement.kind][1],
       requirement: requirement.label,
+      requirementId: requirement.id,
       priority: requirement.mandatory ? 'Alta' as const : 'Media' as const,
       duration: requirement.kind === 'english' ? '4–12 semanas' : '1–2 semanas',
       completed: false,
     }))
   return {
     id: opportunity.id,
+    opportunityId: opportunity.id,
+    origin: 'deterministic',
     title: opportunity.title,
     actions: actions.length ? actions : [{ id: 'review', title: 'Prepara tu postulación', description: 'Organiza tus evidencias y contrasta los requisitos con una fuente oficial cuando esté disponible.', priority: 'Media', duration: '1 semana', completed: false }],
   }
