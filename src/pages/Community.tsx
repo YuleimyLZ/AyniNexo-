@@ -1,49 +1,66 @@
 import { ArrowRight, ArrowUpRight, CheckCircle2, HeartHandshake, Link2 } from 'lucide-react'
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { ActionLink, Button, DemoNote, PageIntro } from '../components/ui'
-import { officialUrl } from '../services/demo'
+import { Link } from 'react-router-dom'
+import { ActionLink, Button, PageIntro, Status } from '../components/ui'
+import { formatDate, todayInPeru } from '../features/eligibility'
+import { officialUrl, userMessage } from '../services/validation'
 import { useWorkspace } from '../services/workspaceContext'
 import { categories } from '../types/domain'
-import type { Category, Submission } from '../types/domain'
+import type { Category } from '../types/domain'
 
 export function Share() {
-  const { workspace, update } = useWorkspace()
+  const { workspace, submitOpportunity, reloadStudent } = useWorkspace()
   const [notice, setNotice] = useState<{ error: boolean; text: string } | null>(null)
-  function submit(event: FormEvent<HTMLFormElement>) {
+  const [busy, setBusy] = useState(false)
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (busy) return
     const form = event.currentTarget
     const fields = new FormData(form)
     const source = officialUrl(String(fields.get('source') ?? ''))
     if (fields.get('website')) return
     if (!source) {
-      setNotice({ error: true, text: 'Ingresa un enlace completo que empiece por https://.' })
+      setNotice({ error: true, text: 'Ingresa un enlace oficial completo que empiece por http:// o https://.' })
       return
     }
-    if (workspace.submissions.some((item) => item.source === source && item.status !== 'Rechazada')) {
-      setNotice({ error: true, text: 'Este enlace ya se compartió en este navegador.' })
-      return
+    setBusy(true)
+    setNotice(null)
+    try {
+      await submitOpportunity({
+        source, text: String(fields.get('text') ?? '').trim(), comment: String(fields.get('comment') ?? '').trim(),
+        category: String(fields.get('category') ?? '') as Category | '',
+      })
+      form.reset()
+      setNotice({ error: false, text: 'Tu aporte se envió y quedó pendiente de revisión.' })
+    } catch (cause) {
+      setNotice({ error: true, text: userMessage(cause, 'No pudimos enviar tu aporte. El formulario conserva tus datos.') })
+    } finally {
+      setBusy(false)
     }
-    const submission: Submission = {
-      id: crypto.randomUUID(), source, text: String(fields.get('text') ?? '').trim(), comment: String(fields.get('comment') ?? '').trim(),
-      category: String(fields.get('category') ?? '') as Category | '', status: 'Pendiente', submittedAt: new Date().toISOString(),
-    }
-    update((previous) => ({ ...previous, submissions: [submission, ...previous.submissions] }))
-    form.reset()
-    setNotice({ error: false, text: 'Tu aporte quedó guardado en este navegador y pendiente de revisión demostrativa.' })
   }
+
   return <div className="container subpage narrow">
     <PageIntro label="Comunidad" icon={<HeartHandshake size={20} />} title={<>Comparte una oportunidad. <em>Multiplica posibilidades.</em></>}>La oportunidad que tú compartes hoy podría cambiar el futuro de otro estudiante.</PageIntro>
-    <DemoNote>Los aportes de esta fase se guardan solo en este navegador y pasan por una revisión simulada.</DemoNote>
+    <p className="quiet">Cada aporte pasa por revisión antes de aparecer en el catálogo.</p>
     <form className="surface simple-panel stacked-form" onSubmit={submit}>
       <label className="field"><span><Link2 size={17} /> Enlace oficial <small>Obligatorio</small></span><input name="source" type="url" required maxLength={2048} placeholder="https://…" /></label>
       <label className="field"><span>Texto de la convocatoria <small>Opcional</small></span><textarea name="text" maxLength={7000} rows={5} placeholder="Pega los requisitos, los beneficios o la fecha límite." /></label>
       <label className="field"><span>Categoría <small>Opcional</small></span><select name="category"><option value="">Selecciona una categoría</option>{categories.map((category) => <option key={category}>{category}</option>)}</select></label>
       <label className="field"><span>Comentario adicional <small>Opcional</small></span><textarea name="comment" rows={3} maxLength={700} /></label>
       <div hidden><label>Dejar en blanco <input name="website" autoComplete="off" tabIndex={-1} /></label></div>
-      <div className="action-row"><Button type="submit">Enviar oportunidad <ArrowRight size={17} /></Button></div>
+      <div className="action-row"><Button type="submit" disabled={busy}>{busy ? 'Enviando…' : 'Enviar oportunidad'} <ArrowRight size={17} /></Button></div>
       {notice && <p className={notice.error ? 'error-text' : 'confirmation'} role={notice.error ? 'alert' : 'status'}>{!notice.error && <CheckCircle2 size={18} />}{notice.text}</p>}
     </form>
+    <section className="submissions-history" aria-labelledby="your-submissions">
+      <div className="section-heading"><h2 id="your-submissions">Mis aportes</h2><Button variant="outline" onClick={reloadStudent}>Actualizar estado</Button></div>
+      {workspace.submissions.length ? <div className="surface admin-list">{workspace.submissions.map((item) => <article key={item.id}>
+        <div><a className="inline-link admin-url" href={officialUrl(item.source) ?? undefined} target="_blank" rel="noreferrer">{item.source} <ArrowUpRight size={15} /></a>
+          <p>{formatDate(todayInPeru(new Date(item.submittedAt)))} · {item.category || 'Sin categoría'}</p></div>
+        <Status>{item.status}</Status>
+        {item.publishedOpportunityId && <Link className="inline-link" to={`/oportunidades/${item.publishedOpportunityId}`}>Ver convocatoria</Link>}
+      </article>)}</div> : <p className="quiet">Todavía no has compartido oportunidades.</p>}
+    </section>
   </div>
 }
 
@@ -57,6 +74,6 @@ export function Contact() {
 export function Privacy() {
   return <div className="container subpage narrow">
     <PageIntro label="Privacidad" title={<>Tus datos, <em>en tu navegador.</em></>} />
-    <div className="surface simple-panel prose-block"><p>En esta fase de demostración, el perfil académico, los guardados, las rutas y los aportes persisten en el almacenamiento local de este navegador. Los datos se conservan al recargar la página y puedes eliminarlos al borrar los datos de este sitio.</p><p>Las recomendaciones se calculan localmente a partir de los intereses que escribes y de un catálogo ficticio. Evita introducir documentos, información de contacto o datos personales sensibles.</p></div>
+    <div className="surface simple-panel prose-block"><p>El perfil académico, las oportunidades guardadas y las rutas se almacenan en Supabase y se asocian a tu cuenta. La persona administradora puede revisar los aportes que envíes. Tu navegador conserva la sesión necesaria para acceder a estos datos.</p><p>Las recomendaciones se calculan en tu navegador a partir de los intereses que escribes y del catálogo de convocatorias publicadas. Evita introducir documentos, información de contacto o datos personales sensibles.</p></div>
   </div>
 }

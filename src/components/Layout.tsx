@@ -1,6 +1,6 @@
 import { ArrowUpRight, Bookmark, Menu, UserRound, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useWorkspace } from '../services/workspaceContext'
 
 const links = [
@@ -15,7 +15,7 @@ function Brand() {
 }
 
 function Header() {
-  const { workspace } = useWorkspace()
+  const { workspace, session } = useWorkspace()
   const [open, setOpen] = useState(false)
   const menuButton = useRef<HTMLButtonElement>(null)
   const count = Object.keys(workspace.saved).length
@@ -39,7 +39,7 @@ function Header() {
               <span className="sr-only">Mis oportunidades guardadas</span>
               {count > 0 && <span className="nav-bookmark-count">{count}</span>}
             </NavLink>
-            <NavLink to={workspace.session ? '/perfil' : '/sesion'} className="nav-sign-in"><UserRound size={17} strokeWidth={1.65} />{workspace.session ? 'Mi perfil' : 'Iniciar sesión'}</NavLink>
+            <NavLink to={session ? '/perfil' : '/sesion'} className="nav-sign-in"><UserRound size={17} strokeWidth={1.65} />{session ? 'Mi perfil' : 'Iniciar sesión'}</NavLink>
           </div>
         </nav>
       </div>
@@ -48,6 +48,7 @@ function Header() {
 }
 
 function Footer() {
+  const { mode } = useWorkspace()
   return (
     <footer className="site-footer"><div className="container">
       <div className="footer-main">
@@ -57,7 +58,7 @@ function Footer() {
           <Link to="/contacto">Contacto <ArrowUpRight size={13} /></Link><Link to="/privacidad">Privacidad</Link>
         </div>
       </div>
-      <div className="footer-bottom"><span>Nacido en Perú, construido para todos.</span><span>Proyecto independiente · Public Beta v0.1 · Demo</span></div>
+      <div className="footer-bottom"><span>Nacido en Perú, construido para todos.</span><span>Proyecto independiente · Public Beta v0.1{mode === 'demo' ? ' · Demo' : ''}</span></div>
     </div></footer>
   )
 }
@@ -65,7 +66,7 @@ function Footer() {
 export function Layout() {
   const { pathname } = useLocation()
   const main = useRef<HTMLElement>(null)
-  const { storageError } = useWorkspace()
+  const { mode, recovery } = useWorkspace()
   useEffect(() => {
     window.scrollTo(0, 0)
     main.current?.focus({ preventScroll: true })
@@ -74,8 +75,10 @@ export function Layout() {
     <>
       <a className="skip-link" href="#contenido">Ir al contenido</a>
       <Header key={pathname} />
-      {storageError && <div className="storage-alert" role="alert">El navegador bloqueó el almacenamiento. Los cambios durarán hasta que cierres esta página.</div>}
-      <main id="contenido" ref={main} tabIndex={-1}><Outlet /></main>
+      {mode === 'setup' && <div className="storage-alert" role="status">Conexión con Supabase pendiente de configuración.</div>}
+      <main id="contenido" ref={main} tabIndex={-1}>
+        {recovery && pathname !== '/sesion' ? <Navigate to="/sesion?modo=actualizar" replace /> : <Outlet />}
+      </main>
       <Footer />
     </>
   )

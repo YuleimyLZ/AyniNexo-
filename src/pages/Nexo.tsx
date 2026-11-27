@@ -4,7 +4,7 @@ import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { ActionLink, Button, CategoryIcon, DemoNote, EmptyState, Eyebrow, PageIntro, Spark, Status } from '../components/ui'
 import type { recommend } from '../features/eligibility'
-import { guidanceService, sampleProfile } from '../services/demo'
+import { guidanceService, sampleProfile } from '../services/guidance'
 import { useWorkspace } from '../services/workspaceContext'
 
 const examples = [
@@ -21,7 +21,7 @@ const groups = [
 ]
 
 export function Nexo() {
-  const { workspace, catalog, catalogState, reloadCatalog } = useWorkspace()
+  const { workspace, catalog, catalogState, reloadCatalog, reloadStudent, mode, session, studentState } = useWorkspace()
   const [goal, setGoal] = useState('')
   const [sample, setSample] = useState(false)
   const [results, setResults] = useState<{ items: ReturnType<typeof recommend>; usedSample: boolean } | null>(null)
@@ -32,13 +32,13 @@ export function Nexo() {
 
   async function submit(event: FormEvent) {
     event.preventDefault()
-    if (goal.trim().length < 8 || pending || catalogState !== 'ready') return
+    if (goal.trim().length < 8 || pending || catalogState !== 'ready' || Boolean(session && studentState === 'loading')) return
     setPending(true)
     setError(false)
     try {
-      const profile = sample ? sampleProfile : workspace.profile
+      const profile = mode === 'demo' && sample ? sampleProfile : workspace.profile
       const items = await guidanceService.match(goal.trim(), profile, catalog)
-      setResults({ items, usedSample: sample })
+      setResults({ items, usedSample: mode === 'demo' && sample })
       requestAnimationFrame(() => {
         output.current?.focus({ preventScroll: true })
         output.current?.scrollIntoView({ block: 'start' })
@@ -57,12 +57,12 @@ export function Nexo() {
           <PageIntro label="Mi Nexo IA" icon={<Spark />} title={<>¿Qué te gustaría <em>alcanzar?</em></>}>Cada camino es diferente. Descubre qué oportunidades se adaptan a ti y cómo puedes prepararte para alcanzarlas.</PageIntro>
           <div className="goal-panel">
             <form onSubmit={submit}>
-              <div className="goal-label"><label htmlFor="goal">Cuéntanos tu objetivo</label><span className="chip chip--demo">Modo demo</span></div>
+              <div className="goal-label"><label htmlFor="goal">Cuéntanos tu objetivo</label><span className="chip chip--demo">{mode === 'demo' ? 'Modo demo' : 'Análisis por reglas'}</span></div>
               <textarea id="goal" ref={goalInput} value={goal} onChange={(event) => setGoal(event.target.value)} placeholder="Por ejemplo, quiero estudiar inteligencia artificial en el extranjero…" required minLength={8} maxLength={400} aria-describedby="goal-hint" onKeyDown={(event) => {
                 if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) event.currentTarget.form?.requestSubmit()
               }} />
               <p id="goal-hint" className="goal-hint"><Shield size={15} />Describe tus intereses sin incluir datos personales.</p>
-              <div className="goal-actions"><label className="check-field"><input type="checkbox" checked={sample} onChange={(event) => setSample(event.target.checked)} /> Usar perfil de ejemplo</label><Button type="submit" disabled={pending || catalogState !== 'ready'}>{pending ? 'Buscando…' : 'Encontrar oportunidades'} <ArrowRight size={17} /></Button></div>
+              <div className="goal-actions">{mode === 'demo' && <label className="check-field"><input type="checkbox" checked={sample} onChange={(event) => setSample(event.target.checked)} /> Usar perfil de ejemplo</label>}<Button type="submit" disabled={pending || catalogState !== 'ready' || Boolean(session && studentState === 'loading')}>{pending ? 'Buscando…' : 'Encontrar oportunidades'} <ArrowRight size={17} /></Button></div>
               {sample && <p className="quiet sample-info">Pregrado, tercer ciclo, inglés B1, Python y disponibilidad para viajar.</p>}
             </form>
             <div className="goal-examples">
@@ -71,10 +71,11 @@ export function Nexo() {
             </div>
           </div>
           <div className="nexo-notes">
-            <DemoNote>Simulación con reglas y un catálogo ficticio.</DemoNote>
+            <DemoNote>{mode === 'demo' ? 'Simulación con reglas y un catálogo ficticio.' : 'Las recomendaciones usan reglas y convocatorias publicadas. La orientación generativa llegará en la próxima fase.'}</DemoNote>
           </div>
+          {session && studentState === 'error' && <p role="alert" className="quiet">Tu perfil no está disponible. Puedes explorar por objetivo o <button className="filter-clear" type="button" onClick={reloadStudent}>reintentar la carga</button>.</p>}
           {catalogState === 'loading' && <p role="status" className="quiet">Cargando catálogo…</p>}
-          {catalogState === 'error' && <p role="alert" className="quiet">No pudimos cargar el catálogo. <button type="button" className="filter-clear" onClick={reloadCatalog}>Reintentar</button></p>}
+          {catalogState === 'error' && <p role="alert" className="quiet">{mode === 'setup' ? 'Configura Supabase para consultar el catálogo.' : <>No pudimos cargar el catálogo. <button type="button" className="filter-clear" onClick={reloadCatalog}>Reintentar</button></>}</p>}
           {error && <p role="alert">No pudimos completar la búsqueda. Inténtalo de nuevo.</p>}
         </div>
       </section>
@@ -87,14 +88,14 @@ export function Nexo() {
             {matches.length ? <div className="recommendation-grid">{matches.map(({ opportunity, assessment, matches: affinity }) => <article key={opportunity.id} className="recommendation-card">
               <CategoryIcon category={opportunity.category} />
               <h4><Link to={`/oportunidades/${opportunity.id}`} state={{ useSample: results.usedSample }}>{opportunity.title}</Link></h4>
-              <p>La convocatoria de ejemplo comparte estos temas con tu objetivo o perfil.</p>
+              <p>La convocatoria comparte estos temas con tu objetivo o perfil.</p>
               <div className="active-filters">{affinity.map((topic) => <span className="chip" key={topic}>{topic}</span>)}</div>
               <p className="assessment-summary"><strong>{assessment.met}</strong> cumplidos · <strong>{assessment.gaps}</strong> con brechas · <strong>{assessment.unknown}</strong> por confirmar</p>
               {assessment.requirements.length > 0 && <details className="requirement-preview"><summary>Ver requisitos y brechas</summary><ul>{assessment.requirements.map((requirement) => <li key={requirement.id}><span>{requirement.label}</span><Status>{requirement.result}</Status></li>)}</ul></details>}
               <Link className="card-link" to={`/oportunidades/${opportunity.id}`} state={{ useSample: results.usedSample }}>Ver oportunidad <ArrowRight size={16} /></Link>
             </article>)}</div> : <p className="quiet">Sin coincidencias en este grupo.</p>}
           </section>
-        }) : <EmptyState title="No encontramos oportunidades afines" action={<ActionLink to="/explorar" variant="outline">Abrir el explorador</ActionLink>}>Prueba con otros intereses, como investigación, becas o tecnología.</EmptyState>}
+        }) : <EmptyState title={catalog.length ? 'No encontramos oportunidades afines' : 'Todavía no hay oportunidades publicadas'} action={<ActionLink to="/explorar" variant="outline">Abrir el explorador</ActionLink>}>{catalog.length ? 'Prueba con otros intereses, como investigación, becas o tecnología.' : 'Podrás obtener recomendaciones cuando haya convocatorias verificadas en el explorador.'}</EmptyState>}
       </section> : <section className="nexo-next"><div className="container nexo-steps">
         <article><Compass size={26} strokeWidth={1.5} /><div><h2>Descubre afinidades</h2><p>Explora oportunidades según tus intereses.</p></div></article>
         <article><ListChecks size={26} strokeWidth={1.5} /><div><h2>Identifica tus brechas</h2><p>Revisa qué cumples y qué te falta.</p></div></article>

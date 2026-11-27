@@ -2,8 +2,9 @@ import { ArrowLeft, ArrowUpRight, CalendarDays, MapPin, Monitor, Wallet } from '
 import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ActionLink, Button, CategoryIcon, DemoNote, EmptyState, Eyebrow, SaveButton, Spark, Status } from '../components/ui'
-import { assessOpportunity, deadlineStatus, formatDate } from '../features/eligibility'
-import { guidanceService, sampleProfile } from '../services/demo'
+import { assessOpportunity, formatDate, opportunityStatus } from '../features/eligibility'
+import { guidanceService, sampleProfile } from '../services/guidance'
+import { officialUrl, userMessage } from '../services/validation'
 import { useWorkspace } from '../services/workspaceContext'
 import type { Opportunity } from '../types/domain'
 
@@ -18,31 +19,35 @@ export function Detail() {
 }
 
 function OpportunityDetail({ opportunity }: { opportunity: Opportunity }) {
-  const { workspace, update } = useWorkspace()
+  const { workspace, session, mode, saveRoadmap, studentState, authState } = useWorkspace()
   const navigate = useNavigate()
-  const { state: entryState } = useLocation()
-  const usingSample = entryState?.useSample === true
+  const location = useLocation()
+  const usingSample = mode === 'demo' && location.state?.useSample === true
   const profile = usingSample ? sampleProfile : workspace.profile
   const [analysisOpen, setAnalysisOpen] = useState(false)
   const [generating, setGenerating] = useState(false)
-  const [planError, setPlanError] = useState(false)
+  const [planError, setPlanError] = useState('')
   const assessment = assessOpportunity(opportunity, profile)
-  const state = deadlineStatus(opportunity.deadline)
+  const state = opportunityStatus(opportunity)
 
   async function generate() {
-    const existing = workspace.roadmaps.find((item) => item.id === opportunity.id)
+    if (!session) {
+      navigate('/sesion', { state: { returnTo: location.pathname } })
+      return
+    }
+    const existing = workspace.roadmaps.find((item) => item.opportunityId === opportunity.id)
     if (existing) {
       navigate(`/mi-ruta?oportunidad=${opportunity.id}`)
       return
     }
     setGenerating(true)
-    setPlanError(false)
+    setPlanError('')
     try {
       const roadmap = await guidanceService.plan(opportunity, profile)
-      update((previous) => previous.roadmaps.some((item) => item.id === roadmap.id) ? previous : { ...previous, roadmaps: [...previous.roadmaps, roadmap] })
+      await saveRoadmap(roadmap)
       navigate(`/mi-ruta?oportunidad=${opportunity.id}`)
-    } catch {
-      setPlanError(true)
+    } catch (cause) {
+      setPlanError(userMessage(cause, 'No pudimos guardar la ruta. Inténtalo de nuevo.'))
     } finally {
       setGenerating(false)
     }
@@ -55,7 +60,7 @@ function OpportunityDetail({ opportunity }: { opportunity: Opportunity }) {
         <div className="detail-kicker"><CategoryIcon category={opportunity.category} /><Eyebrow>{opportunity.category}</Eyebrow><Status>{state}</Status></div>
         <h1>{opportunity.title}</h1><p>{opportunity.organization}</p>
       </div>
-      <DemoNote>Convocatoria de demostración. Úsala para conocer el funcionamiento de AyniNexo.</DemoNote>
+      {mode === 'demo' && <DemoNote>Convocatoria de demostración. Úsala para conocer el funcionamiento de AyniNexo.</DemoNote>}
       <div className="detail-grid">
         <div className="detail-main">
           <section><h2>Sobre la oportunidad</h2><p>{opportunity.description}</p></section>
@@ -81,20 +86,21 @@ function OpportunityDetail({ opportunity }: { opportunity: Opportunity }) {
         </aside>
       </div>
       <section className="analysis-panel">
-        <Eyebrow icon={<Spark />}>Mi Nexo IA · Simulación</Eyebrow>
+        <Eyebrow icon={<Spark />}>Mi Nexo IA · Análisis por reglas</Eyebrow>
         <h2>¿Cómo te preparas para esta oportunidad?</h2>
-        <p>{state === 'Vencida' ? 'Usa este ejemplo para prepararte para futuras convocatorias.' : 'Compara los requisitos con tu perfil y convierte tus brechas en próximos pasos.'}</p>
+        <p>{['Vencida', 'Cerrada'].includes(state) ? 'Usa estos requisitos para prepararte para futuras convocatorias.' : 'Compara los requisitos con tu perfil y convierte tus brechas en próximos pasos.'}</p>
         <div className="action-row">
           <Button variant="outline" aria-expanded={analysisOpen} aria-controls="eligibility-results" onClick={() => setAnalysisOpen(!analysisOpen)}>Analizar mi perfil</Button>
-          <Button onClick={generate} disabled={generating}>{generating ? 'Generando…' : 'Generar mi ruta con IA'}</Button>
+          <Button onClick={generate} disabled={generating || authState === 'loading' || Boolean(session && studentState !== 'ready')}>{generating ? 'Generando…' : 'Generar mi ruta'}</Button>
         </div>
-        {planError && <p role="alert">No pudimos generar la ruta. Inténtalo de nuevo.</p>}
+        {planError && <p role="alert">{planError}</p>}
         <div id="eligibility-results" className="analysis-results" hidden={!analysisOpen}>
           <h3>Elegibilidad formal</h3>
           {usingSample && <p>Evaluación con el perfil de ejemplo de Mi Nexo IA.</p>}
           <p>{assessment.met} requisitos obligatorios cumplidos · {assessment.gaps} con brechas · {assessment.unknown} por confirmar</p>
-          {assessment.requirements.length > 0 && <ul>{assessment.requirements.map((item) => <li key={item.id}><span>{item.label} <small>· {item.mandatory ? 'Obligatorio' : 'Deseable'}</small></span><Status>{item.result}</Status></li>)}</ul>}
-          <div className="action-row"><Button onClick={generate} disabled={generating}>Construye tu camino</Button><ActionLink to="/perfil" variant="text" arrow>Completar mi perfil</ActionLink></div>
+          {assessment.requirements.length > 0 && <ul>{assessment.requirements.map((item) => <li key={item.id}><span>{item.label} <small>· {item.mandatory ? 'Obligatorio' : 'Deseable'}</small>
+            {item.source && officialUrl(item.source) && <a href={officialUrl(item.source)!} className="inline-link" target="_blank" rel="noreferrer">Fuente del requisito <ArrowUpRight size={14} /></a>}</span><Status>{item.result}</Status></li>)}</ul>}
+          <div className="action-row"><Button onClick={generate} disabled={generating || authState === 'loading' || Boolean(session && studentState !== 'ready')}>Construye tu camino</Button><ActionLink to="/perfil" variant="text" arrow>Completar mi perfil</ActionLink></div>
         </div>
       </section>
     </div>

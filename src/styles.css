@@ -457,3 +457,18 @@ progress::-moz-progress-bar { background: var(--primary); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; }
 }
+
+.account-email { display: flex; align-items: center; gap: 8px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.auth-feedback, .auth-links { margin-top: 12px; }
+.auth-links { font-size: .88rem; }
+.save-control { position: relative; }
+.save-error { margin-top: 6px; font-size: .8rem; }
+.save-control--compact .save-error { z-index: 1; position: absolute; inset: auto 0 auto auto; width: max-content; max-width: 180px; padding: 7px; border: 1px solid var(--border); border-radius: 7px; background: var(--card); }
+.submissions-history { margin-top: 45px; }
+.submissions-history .section-heading h2 { font-size: clamp(1.5rem, 3vw, 2.3rem); }
+.admin-filters { align-items: end; margin-bottom: 12px; }
+.admin-form { margin-top: 16px; }
+.requirements-editor { display: grid; gap: 12px; }
+.stacked-form > .requirements-editor { padding: 0; }
+.requirement-fields { padding: 12px; }
+.requirement-fields .action-row { margin-top: 7px; }

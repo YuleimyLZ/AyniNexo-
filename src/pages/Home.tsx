@@ -1,7 +1,7 @@
 import { ArrowRight, ArrowUpRight, Globe2, HeartHandshake, Network } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { ActionLink, CategoryIcon, DemoNote, Eyebrow, OpportunityCard, Spark } from '../components/ui'
-import { deadlineStatus } from '../features/eligibility'
+import { opportunityStatus } from '../features/eligibility'
 import { useWorkspace } from '../services/workspaceContext'
 import { categories } from '../types/domain'
 
@@ -12,8 +12,8 @@ const pillars = [
 ]
 
 export function Home() {
-  const { catalog } = useWorkspace()
-  const featured = catalog.filter((opportunity) => opportunity.status === 'Aprobada' && deadlineStatus(opportunity.deadline) === 'Abierta').slice(0, 3)
+  const { catalog, catalogState, mode } = useWorkspace()
+  const featured = catalog.filter((opportunity) => opportunity.status === 'Aprobada' && opportunityStatus(opportunity) === 'Abierta').slice(0, 3)
 
   return (
     <>
@@ -62,8 +62,8 @@ export function Home() {
           <div><Eyebrow>El explorador</Eyebrow><h2 id="featured-heading">Oportunidades destacadas</h2></div>
           <ActionLink to="/explorar" variant="text" arrow>Abrir el explorador</ActionLink>
         </div>
-        <DemoNote />
-        {featured.length > 0 ? <div className="card-grid featured-grid">{featured.map((item) => <OpportunityCard key={item.id} opportunity={item} />)}</div> : <p className="quiet">Consulta el catálogo para ver las oportunidades disponibles.</p>}
+        {mode === 'demo' && <DemoNote />}
+        {featured.length > 0 ? <div className="card-grid featured-grid">{featured.map((item) => <OpportunityCard key={item.id} opportunity={item} />)}</div> : <p className="quiet">{catalogState === 'loading' ? 'Cargando oportunidades…' : catalogState === 'error' ? 'No pudimos consultar las oportunidades. Puedes reintentar desde el explorador.' : 'Las nuevas convocatorias aparecerán aquí después de su revisión.'}</p>}
       </section>
 
       <section className="story-section" aria-labelledby="story-heading">

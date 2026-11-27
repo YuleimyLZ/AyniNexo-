@@ -1,29 +1,28 @@
 # Arquitectura de AyniNexo
 
-React, TypeScript estricto y React Router componen las páginas sobre Vite. Tailwind comparte los tokens CSS con los componentes de interfaz. Lucide aporta los iconos funcionales.
+Vite sirve una SPA en React con TypeScript estricto y React Router. Tailwind comparte los tokens Rosewood con los componentes. El SDK de Supabase usa la clave publicable y la sesión del usuario para acceder a Auth y PostgREST.
 
-| Carpeta | Responsabilidad |
+| Ubicación | Responsabilidad |
 | --- | --- |
-| `src/pages` | Rutas y orquestación de flujos |
-| `src/components` | Sistema de componentes, tarjetas y navegación |
-| `src/types` | Contratos de perfil, oportunidades, requisitos, aportes y rutas |
-| `src/features` | Motor de elegibilidad, recomendaciones, preparación y moderación |
-| `src/services` | Adaptadores del catálogo, almacenamiento y guía demostrativa |
-| `tests` | Reglas, fechas, recomendaciones, URL y moderación |
+| `src/pages`, `src/components` | Vistas, formularios, navegación y controles de acceso en la interfaz |
+| `src/types/domain.ts`, `src/types/database.ts` | Tipos de interfaz y del esquema de Supabase |
+| `src/features` | Elegibilidad, afinidad, preparación y edición de oportunidades |
+| `src/services/repository.ts`, `records.ts` | Acceso a tablas, RPC y conversión de registros a modelos |
+| `src/services/WorkspaceProvider.tsx` | Suscripción a Supabase Auth, carga del catálogo y estado privado por usuario |
+| `supabase/migrations` | Esquema, permisos, políticas RLS y funciones transaccionales |
 
-El repositorio de demostración combina un catálogo fijo con los cambios del panel y guarda el estado en `localStorage`. Las oportunidades archivadas quedan fuera del catálogo público. La puntuación interna ordena la afinidad textual y no se muestra como probabilidad. El motor compara requisitos estructurados y modela las brechas académicas de forma independiente.
+El catálogo público se consulta sin sesión y la consulta explícita mantiene el filtro publicado incluso si la persona Owner abre el explorador. El catálogo de desarrollo requiere una variable explícita y solo se carga en Vite en modo desarrollo. Los errores de Supabase se muestran en la interfaz.
 
-## Fase 2 — Supabase
+Los datos académicos, aportes, guardados y rutas se mantienen en memoria mientras están en uso. Supabase Auth conserva la sesión y el verificador PKCE. Al cambiar de cuenta, la interfaz muestra solo datos asociados al nuevo identificador. El backend aplica la misma separación por RLS.
 
-1. Con autorización de la fundadora, crear un proyecto en el panel de Supabase y usar el SQL Editor o Supabase CLI para aplicar futuras migraciones versionadas.
-2. Modelar perfiles, oportunidades, requisitos, aportes, guardados, rutas, acciones y roles. Configurar RLS y probar el acceso de visitante, estudiante autenticado y administradora. La asignación de Owner se hará mediante un mecanismo administrativo.
-3. Configurar la URL y la clave publicable del proyecto en el archivo local `.env` del frontend a partir de `.env.example`. Configurar en Supabase Auth la URL local y los destinos autorizados de redirección.
-4. Implementar adaptadores persistentes y reemplazar la sesión de demostración. La aprobación y publicación serán una operación de backend con validación de rol. Verificar que usuarios sin rol solo vean oportunidades aprobadas y no puedan modificar aportes ajenos.
+## Decisiones del esquema
 
-## Fase 3 — Gemini
+- El catálogo separa `publication_status` y `is_public` de `call_status`. Una convocatoria publicada puede estar cerrada, vencida por fecha en la zona de Lima o abierta. La fecha ausente se muestra por confirmar.
+- Cada requisito conserva su clase, condición, valor estructurado, carácter obligatorio, fuente y orden. Las ediciones mantienen los identificadores de los requisitos existentes. Una edición desactualizada recibe un error de concurrencia.
+- Los guardados y las rutas son únicos por `user_id` y `opportunity_id`. La creación de la ruta y sus acciones es atómica. Un reintento recupera la ruta existente. `origin` distingue `deterministic` y `ai`.
+- El envío de aportes establece el estado pendiente en PostgreSQL. La publicación inserta la convocatoria y sus requisitos, actualiza el aporte y registra la auditoría dentro de una sola transacción.
+- Las fuentes se validan como enlaces HTTP/HTTPS. La clave única normaliza esquema, host, puerto predeterminado, barras finales y fragmentos. Se preservan los parámetros de consulta.
 
-Configurar `GEMINI_API_KEY` en **Supabase → Edge Functions → Secrets** cuando la integración esté autorizada. El frontend llamará a `extract-opportunity`, `match-opportunities` y `generate-roadmap` mediante un adaptador de `GuidanceService`. Validar entradas, esquema de cada salida y correspondencia entre IDs devueltos y el catálogo aprobado. Mantener revisión humana de la extracción y probar límites persistentes, fallos del proveedor y el fallback informado. Enviar solo los atributos académicos necesarios, sin identificadores personales.
+## Fase 3
 
-## Fase 5 — Vercel
-
-Tras validar datos y permisos y con autorización para publicar, importar el repositorio existente en Vercel como proyecto Vite. Usar `npm run build` y `dist`. Configurar la reescritura de rutas SPA a `index.html` y las variables públicas de Supabase. Agregar la URL desplegada a los destinos autorizados en Supabase Auth. Verificar el ingreso directo a rutas internas, la navegación en móvil y los permisos por rol.
+`src/services/edgeGuidance.ts` define peticiones y respuestas para `extract-opportunity`, `match-opportunities` y `generate-roadmap` y exige validación de la respuesta en el adaptador. El motor determinístico actual usa requisitos estructurados y trabaja en el cliente. La Fase 3 incorporará las Edge Functions, la autorización, las cuotas y la verificación de que las oportunidades recomendadas estén aprobadas. La extracción continuará sujeta a verificación humana. [Roadmap](roadmap.md)
