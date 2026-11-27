@@ -1,13 +1,13 @@
 import type { Opportunity, Submission } from '../types/domain'
 
-export type Draft = Omit<Opportunity, 'benefits' | 'pending' | 'source' | 'deadline' | 'verified'> & {
-  benefits: string; pending: string; source: string; deadline: string; verified: string
+export type Draft = Omit<Opportunity, 'benefits' | 'pending' | 'source' | 'deadline' | 'verified' | 'category' | 'modality'> & {
+  category: Opportunity['category'] | ''; modality: Opportunity['modality'] | ''; benefits: string; pending: string; source: string; deadline: string; verified: string
 }
 
 export function emptyDraft(): Draft {
   return {
-    id: '', title: '', organization: '', category: 'Becas', country: '', modality: 'Virtual', funding: 'Por confirmar',
-    levels: ['Pregrado'], deadline: '', verified: '', source: '', description: '', benefits: '', pending: '',
+    id: '', title: '', organization: '', category: '', country: '', modality: '', funding: 'Por confirmar',
+    levels: [], deadline: '', verified: '', source: '', description: '', benefits: '', pending: '',
     topics: [], requirements: [], status: 'Aprobada',
   }
 }
@@ -21,10 +21,11 @@ export function editDraft(item: Opportunity): Draft {
 }
 
 export function submissionDraft(submission: Submission): Draft {
-  return { ...emptyDraft(), source: submission.source, category: submission.category || 'Becas' }
+  return { ...emptyDraft(), source: submission.source, category: submission.category }
 }
 
 export function makeOpportunity(draft: Draft, source: string): Opportunity {
+  if (!draft.category || !draft.modality) throw new Error('Confirma la categoría y la modalidad.')
   const lines = (value: string) => Array.from(new Set(value.split('\n').map((line) => line.trim()).filter(Boolean)))
   return {
     id: draft.id, title: draft.title.trim(), organization: draft.organization.trim(), country: draft.country.trim(), category: draft.category,

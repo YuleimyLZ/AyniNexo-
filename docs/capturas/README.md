@@ -1,4 +1,16 @@
-# Capturas de la Fase 1
+# Capturas de AyniNexo
+
+## Fase 3
+
+Chromium con Playwright capturó pantallas completas a 1440 px y 393 px de ancho. La integración usa cuentas y un backend de prueba. El catálogo de prueba reproduce los registros públicos de ETH y CERN y el extractor usa una respuesta estructurada simulada de KAUST.
+
+| Pantalla | Escritorio | Móvil |
+| --- | --- | --- |
+| Inicio de Mi Nexo IA | [Abrir captura](fase-3-mi-nexo-inicio-escritorio.png) | [Abrir captura](fase-3-mi-nexo-inicio-movil.png) |
+| Conversación después de agotar la cuota simulada | [Abrir captura](fase-3-mi-nexo-conversacion-escritorio.png) | [Abrir captura](fase-3-mi-nexo-conversacion-movil.png) |
+| Extractor con borrador y evidencia de KAUST | [Abrir captura](fase-3-extractor-escritorio.png) | [Abrir captura](fase-3-extractor-movil.png) |
+
+## Referencias de Fase 1
 
 Playwright capturó las páginas completas en Chromium con ventanas de **1440 × 960** (escritorio) y **390 × 844** (móvil). Las imágenes muestran el frontend con su catálogo de demostración.
 

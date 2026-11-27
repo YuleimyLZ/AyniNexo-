@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AdminCounts, Database, ModerationStatus } from '../types/database'
 import { emptyProfile } from '../types/domain'
 import type { Opportunity, Profile, Roadmap, SavedStatus, Submission } from '../types/domain'
-import { readOpportunity, readProfile, readRoadmap, readSubmission, writeAction, writeOpportunity, writeProfile, writeRequirement } from './records'
+import { catalogColumns, readOpportunity, readProfile, readRoadmap, readSubmission, writeAction, writeOpportunity, writeProfile, writeRequirement } from './records'
 
 export type StudentData = { profile: Profile; saved: Record<string, SavedStatus>; roadmaps: Roadmap[]; submissions: Submission[] }
 export type SubmissionInput = Pick<Submission, 'source' | 'text' | 'category' | 'comment'>
@@ -10,7 +10,6 @@ export type AdminData = { catalog: Opportunity[]; counts: AdminCounts; submissio
 
 export const emptyStudentData: StudentData = { profile: emptyProfile, saved: {}, roadmaps: [], submissions: [] }
 
-const catalogColumns = 'id,title,organization,description,category,country,modality,academic_levels,funding,benefits,pending_information,topics,deadline,source,verified_on,publication_status,is_public,call_status,created_at,updated_at,opportunity_requirements(*)'
 const submissionColumns = 'id,source,body,suggested_category,comment,status,submitted_at,reviewed_at,published_opportunity_id'
 
 function unpack<Result extends { data: unknown; error: unknown }>(result: Result): Result['data'] {

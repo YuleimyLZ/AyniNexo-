@@ -1,11 +1,13 @@
 import { ArrowUpRight, Check, Pencil, Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
+import { OpportunityExtractor } from '../components/OpportunityExtractor'
 import { RequirementsEditor } from '../components/RequirementsEditor'
-import { Button, DemoNote, EmptyState, PageIntro, Status } from '../components/ui'
+import { Button, EmptyState, PageIntro, Status } from '../components/ui'
 import { formatDate, opportunityStatus, todayInPeru } from '../features/eligibility'
 import { editDraft, emptyDraft, makeOpportunity, submissionDraft } from '../features/moderation'
 import type { Draft } from '../features/moderation'
+import type { Extraction } from '../services/aiContracts'
 import { submissionLabels } from '../services/records'
 import { createRepository } from '../services/repository'
 import type { AdminData } from '../services/repository'
@@ -141,6 +143,7 @@ function AdminEditor({ editor, onClose, completed }: { editor: Editor; onClose: 
   const [note, setNote] = useState(editor.submission?.moderatorNote ?? '')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [extracting, setExtracting] = useState(false)
   const { submission } = editor
   const awaitingReview = submission?.status === 'Pendiente' || submission?.status === 'En revisión'
   const editable = !submission || awaitingReview || Boolean(draft.id)
@@ -149,8 +152,22 @@ function AdminEditor({ editor, onClose, completed }: { editor: Editor; onClose: 
     setDraft((previous) => ({ ...previous, [key]: value }))
   }
 
+  function applyExtraction(result: Extraction) {
+    setDraft((previous) => ({
+      ...previous,
+      source: result.source, verified: '', title: result.title ?? previous.title, organization: result.organization ?? previous.organization,
+      category: result.category ?? previous.category, country: result.country ?? previous.country, modality: result.modality ?? previous.modality,
+      funding: result.funding ?? previous.funding, deadline: result.deadline ?? previous.deadline, description: result.description ?? previous.description,
+      benefits: result.benefits.length ? result.benefits.join('\n') : previous.benefits,
+      levels: result.levels.length ? result.levels : previous.levels,
+      pending: result.pending.join('\n').slice(0, 1500),
+      requirements: [...previous.requirements, ...result.requirements.filter((item) => !previous.requirements.some((current) => current.label === item.label))].slice(0, 30),
+    }))
+    if (result.topics.length) setTopics(result.topics.join(', ').slice(0, 400))
+  }
+
   async function review(status: 'reviewing' | 'rejected' | 'archived') {
-    if (!submission || !repository || busy) return
+    if (!submission || !repository || busy || extracting) return
     setBusy(true)
     setError('')
     try {
@@ -168,12 +185,12 @@ function AdminEditor({ editor, onClose, completed }: { editor: Editor; onClose: 
 
   async function save(event: FormEvent) {
     event.preventDefault()
-    if (busy || !repository || !editable) return
+    if (busy || extracting || !repository || !editable) return
     const source = officialUrl(draft.source)
     if (!source) { setError('Ingresa un enlace oficial que empiece por http:// o https://.'); return }
     const topicList = [...new Set(topics.split(',').map((topic) => topic.trim()).filter(Boolean))]
-    if (!draft.title.trim() || !draft.organization.trim() || !draft.country.trim() || !draft.description.trim() || !draft.levels.length || !draft.verified || topicList.length > 20) {
-      setError('Completa el título, la institución, el país, la descripción, el nivel académico y la verificación. Usa hasta 20 temas.')
+    if (!draft.title.trim() || !draft.organization.trim() || !draft.country.trim() || !draft.description.trim() || !draft.category || !draft.modality || !draft.levels.length || !draft.verified || topicList.length > 20) {
+      setError('Completa el título, la institución, el país, la descripción, la categoría, la modalidad, el nivel académico y la verificación. Usa hasta 20 temas.')
       return
     }
     const requirements = draft.requirements.map((item) => ({ ...item, source: item.source ? officialUrl(item.source) ?? '' : undefined }))
@@ -195,21 +212,21 @@ function AdminEditor({ editor, onClose, completed }: { editor: Editor; onClose: 
   }
 
   return <section className="surface simple-panel admin-editor" id="admin-editor">
-    <div className="section-heading"><h2>{submission ? 'Revisar aporte' : draft.id ? 'Editar oportunidad' : 'Nueva oportunidad'}</h2><Button variant="text" onClick={onClose} disabled={busy}>Cerrar editor</Button></div>
+    <div className="section-heading"><h2>{submission ? 'Revisar aporte' : draft.id ? 'Editar oportunidad' : 'Nueva oportunidad'}</h2><Button variant="text" onClick={onClose} disabled={busy || extracting}>Cerrar editor</Button></div>
     {submission && <div className="original-submission"><h3>Aporte original</h3><OfficialSource source={submission.source} />
       <p>{submission.text || 'El aporte contiene únicamente un enlace.'}</p>{submission.comment && <p><strong>Comentario</strong> · {submission.comment}</p>}
       <Status>{submission.status}</Status>
     </div>}
-    <DemoNote>La extracción con IA se integrará en la Fase 3. Completa los campos a partir de la fuente oficial.</DemoNote>
+    {editable && !draft.id && <OpportunityExtractor source={draft.source} onSource={(value) => change('source', value)} onApply={applyExtraction} onPending={setExtracting} />}
     <form className="stacked-form admin-form" onSubmit={save}>
       {submission && <label className="field"><span>Observaciones privadas de moderación</span><textarea aria-label="Observaciones privadas de moderación" maxLength={2000} rows={3} value={note} onChange={(event) => setNote(event.target.value)} /></label>}
       {editable && <>
         <div className="form-grid">
           <label className="field"><span>Título</span><input required value={draft.title} maxLength={130} onChange={(event) => change('title', event.target.value)} /></label>
           <label className="field"><span>Institución</span><input required value={draft.organization} maxLength={100} onChange={(event) => change('organization', event.target.value)} /></label>
-          <label className="field"><span>Categoría</span><select aria-label="Categoría" value={draft.category} onChange={(event) => change('category', event.target.value as Draft['category'])}>{categories.map((option) => <option key={option}>{option}</option>)}</select></label>
+          <label className="field"><span>Categoría</span><select required aria-label="Categoría" value={draft.category} onChange={(event) => change('category', event.target.value as Draft['category'])}><option value="">Por confirmar</option>{categories.map((option) => <option key={option}>{option}</option>)}</select></label>
           <label className="field"><span>País</span><input required value={draft.country} maxLength={60} onChange={(event) => change('country', event.target.value)} /></label>
-          <label className="field"><span>Modalidad</span><select aria-label="Modalidad" value={draft.modality} onChange={(event) => change('modality', event.target.value as Draft['modality'])}>{modalities.map((option) => <option key={option}>{option}</option>)}</select></label>
+          <label className="field"><span>Modalidad</span><select required aria-label="Modalidad" value={draft.modality} onChange={(event) => change('modality', event.target.value as Draft['modality'])}><option value="">Por confirmar</option>{modalities.map((option) => <option key={option}>{option}</option>)}</select></label>
           <label className="field"><span>Financiamiento</span><select aria-label="Financiamiento" value={draft.funding} onChange={(event) => change('funding', event.target.value as Draft['funding'])}>{fundingOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
           <label className="field"><span>Fecha límite</span><input type="date" value={draft.deadline} onChange={(event) => change('deadline', event.target.value)} /></label>
           <label className="field"><span>Última verificación</span><input type="date" required max={todayInPeru()} value={draft.verified} onChange={(event) => change('verified', event.target.value)} /></label>
@@ -226,10 +243,10 @@ function AdminEditor({ editor, onClose, completed }: { editor: Editor; onClose: 
         <RequirementsEditor requirements={draft.requirements} onChange={(value) => change('requirements', value)} />
       </>}
       <div className="action-row">
-        {editable && <Button type="submit" disabled={busy}><Check size={17} />{draft.id ? 'Guardar cambios' : awaitingReview ? 'Aprobar y publicar' : 'Publicar oportunidad'}</Button>}
-        {submission?.status === 'Pendiente' && <Button variant="outline" disabled={busy} onClick={() => void review('reviewing')}>Pasar a revisión</Button>}
-        {awaitingReview && <Button variant="outline" disabled={busy} onClick={() => void review('rejected')}>Rechazar aporte</Button>}
-        {submission && submission.status !== 'Archivada' && <Button variant="text" disabled={busy} onClick={() => void review('archived')}>Archivar aporte</Button>}
+        {editable && <Button type="submit" disabled={busy || extracting}><Check size={17} />{draft.id ? 'Guardar cambios' : awaitingReview ? 'Aprobar y publicar' : 'Publicar oportunidad'}</Button>}
+        {submission?.status === 'Pendiente' && <Button variant="outline" disabled={busy || extracting} onClick={() => void review('reviewing')}>Pasar a revisión</Button>}
+        {awaitingReview && <Button variant="outline" disabled={busy || extracting} onClick={() => void review('rejected')}>Rechazar aporte</Button>}
+        {submission && submission.status !== 'Archivada' && <Button variant="text" disabled={busy || extracting} onClick={() => void review('archived')}>Archivar aporte</Button>}
       </div>
       {error && <p className="error-text" role="alert">{error}</p>}
     </form>

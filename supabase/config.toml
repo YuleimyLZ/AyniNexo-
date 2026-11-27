@@ -1,0 +1,9 @@
+# Each function verifies the user's bearer token through Supabase Auth.
+[functions.match-opportunities]
+verify_jwt = false
+
+[functions.extract-opportunity]
+verify_jwt = false
+
+[functions.generate-roadmap]
+verify_jwt = false

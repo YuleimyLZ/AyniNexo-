@@ -11,7 +11,9 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:edge": "node scripts/build-edge.mjs",
+    "test:browser": "playwright test"
   },
   "dependencies": {
     "@fontsource-variable/dm-sans": "^5.2.8",
@@ -23,11 +25,15 @@
     "react-router-dom": "^7.13.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.6.0",
     "@eslint/js": "^9.39.0",
+    "@playwright/test": "1.65.1",
     "@tailwindcss/vite": "^4.2.0",
+    "@types/node": "^22.20.7",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.1.0",
+    "esbuild": "0.28.2",
     "eslint": "^9.39.0",
     "eslint-plugin-react-hooks": "^7.0.0",
     "globals": "^16.5.0",

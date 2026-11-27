@@ -1,11 +1,16 @@
 import { ArrowLeft, ArrowUpRight, CalendarDays, MapPin, Monitor, Wallet } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ActionLink, Button, CategoryIcon, DemoNote, EmptyState, Eyebrow, SaveButton, Spark, Status } from '../components/ui'
 import { assessOpportunity, formatDate, opportunityStatus } from '../features/eligibility'
-import { guidanceService, sampleProfile } from '../services/guidance'
+import { buildPreparationPlan } from '../features/roadmapPlan'
+import { horizons, oneOf } from '../services/aiContracts'
+import type { Horizon } from '../services/aiContracts'
+import { generatePlan, GuidanceError } from '../services/edgeGuidance'
+import { sampleProfile } from '../services/guidance'
 import { officialUrl, userMessage } from '../services/validation'
 import { useWorkspace } from '../services/workspaceContext'
+import { emptyProfile } from '../types/domain'
 import type { Opportunity } from '../types/domain'
 
 export function Detail() {
@@ -19,11 +24,18 @@ export function Detail() {
 }
 
 function OpportunityDetail({ opportunity }: { opportunity: Opportunity }) {
-  const { workspace, session, mode, saveRoadmap, studentState, authState } = useWorkspace()
+  const { workspace, session, mode, saveRoadmap, reloadStudent, studentState, authState } = useWorkspace()
   const navigate = useNavigate()
   const location = useLocation()
   const usingSample = mode === 'demo' && location.state?.useSample === true
-  const profile = usingSample ? sampleProfile : workspace.profile
+  const fromChat = typeof location.state?.useProfile === 'boolean'
+  const [useProfile, setUseProfile] = useState(!fromChat || location.state.useProfile === true)
+  const profile = usingSample ? sampleProfile : useProfile ? workspace.profile : emptyProfile
+  const [horizon, setHorizon] = useState<Horizon>(oneOf(location.state?.horizon, horizons) ? location.state.horizon : 6)
+  const preparation = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (location.hash === '#preparacion') preparation.current?.scrollIntoView({ block: 'start' })
+  }, [location.hash])
   const [analysisOpen, setAnalysisOpen] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [planError, setPlanError] = useState('')
@@ -31,8 +43,9 @@ function OpportunityDetail({ opportunity }: { opportunity: Opportunity }) {
   const state = opportunityStatus(opportunity)
 
   async function generate() {
+    if (generating) return
     if (!session) {
-      navigate('/sesion', { state: { returnTo: location.pathname } })
+      navigate('/sesion', { state: { returnTo: location.pathname + location.hash } })
       return
     }
     const existing = workspace.roadmaps.find((item) => item.opportunityId === opportunity.id)
@@ -43,9 +56,17 @@ function OpportunityDetail({ opportunity }: { opportunity: Opportunity }) {
     setGenerating(true)
     setPlanError('')
     try {
-      const roadmap = await guidanceService.plan(opportunity, profile)
-      await saveRoadmap(roadmap)
-      navigate(`/mi-ruta?oportunidad=${opportunity.id}`)
+      let note = ''
+      try {
+        const result = await generatePlan(opportunity.id, horizon, useProfile)
+        if (result.fallback === 'quota') note = 'Se alcanzó el límite de IA. Guardamos una ruta basada en reglas.'
+        reloadStudent()
+      } catch (cause) {
+        if (cause instanceof GuidanceError && cause.code === 'catalog') throw new Error('La convocatoria ya no está disponible.')
+        await saveRoadmap(buildPreparationPlan(opportunity, profile, horizon))
+        note = 'Gemini no está disponible. Guardamos una ruta basada en reglas.'
+      }
+      navigate(`/mi-ruta?oportunidad=${opportunity.id}`, { state: { note } })
     } catch (cause) {
       setPlanError(userMessage(cause, 'No pudimos guardar la ruta. Inténtalo de nuevo.'))
     } finally {
@@ -85,10 +106,16 @@ function OpportunityDetail({ opportunity }: { opportunity: Opportunity }) {
           </div>
         </aside>
       </div>
-      <section className="analysis-panel">
+      <section className="analysis-panel" id="preparacion" ref={preparation}>
         <Eyebrow icon={<Spark />}>Mi Nexo IA · Análisis por reglas</Eyebrow>
         <h2>¿Cómo te preparas para esta oportunidad?</h2>
-        <p>{['Vencida', 'Cerrada'].includes(state) ? 'Usa estos requisitos para prepararte para futuras convocatorias.' : 'Compara los requisitos con tu perfil y convierte tus brechas en próximos pasos.'}</p>
+        <p>{['Vencida', 'Cerrada'].includes(state) ? 'Usa estos requisitos como referencia. Una futura edición depende de la institución.' : 'Compara los requisitos con tu perfil y convierte tus brechas en próximos pasos.'}</p>
+        <div className="roadmap-controls">
+          {session && <label className="check-field"><input type="checkbox" checked={useProfile} disabled={generating} onChange={(event) => setUseProfile(event.target.checked)} /> Usar mi perfil guardado</label>}
+          <label className="field"><span>Horizonte aproximado</span><select value={horizon} disabled={generating} onChange={(event) => setHorizon(Number(event.target.value) as Horizon)}>
+            {horizons.map((months) => <option key={months} value={months}>{months} meses</option>)}
+          </select></label>
+        </div>
         <div className="action-row">
           <Button variant="outline" aria-expanded={analysisOpen} aria-controls="eligibility-results" onClick={() => setAnalysisOpen(!analysisOpen)}>Analizar mi perfil</Button>
           <Button onClick={generate} disabled={generating || authState === 'loading' || Boolean(session && studentState !== 'ready')}>{generating ? 'Generando…' : 'Generar mi ruta'}</Button>

@@ -16,10 +16,11 @@ import { Home } from './pages/Home'
 import { Nexo } from './pages/Nexo'
 import { Profile, Roadmap, Saved } from './pages/Student'
 import { Session } from './pages/Session'
+import { ChatSession } from './services/chatSession'
 import { WorkspaceProvider } from './services/WorkspaceProvider'
 
 createRoot(document.getElementById('root')!).render(
-  <StrictMode><BrowserRouter useTransitions={false}><WorkspaceProvider><Routes>
+  <StrictMode><BrowserRouter useTransitions={false}><WorkspaceProvider><ChatSession><Routes>
     <Route element={<Layout />} path="/">
       <Route index element={<Home />} />
       <Route path="explorar" element={<Explore />} />
@@ -40,5 +41,5 @@ createRoot(document.getElementById('root')!).render(
       </Route>
       <Route path="*" element={<div className="container section-space"><EmptyState title="No encontramos esta página" action={<ActionLink to="/">Volver al inicio</ActionLink>}>Verifica el enlace o vuelve a la portada.</EmptyState></div>} />
     </Route>
-  </Routes></WorkspaceProvider></BrowserRouter></StrictMode>,
+  </Routes></ChatSession></WorkspaceProvider></BrowserRouter></StrictMode>,
 )

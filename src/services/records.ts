@@ -70,6 +70,8 @@ export function writeRequirement(requirement: Requirement): Json {
   }
 }
 
+export const catalogColumns = 'id,title,organization,description,category,country,modality,academic_levels,funding,benefits,pending_information,topics,deadline,source,verified_on,publication_status,is_public,call_status,created_at,updated_at,opportunity_requirements(*)'
+
 export type CatalogRow = Omit<OpportunityRow, 'published_by' | 'source_key'> & { opportunity_requirements: RequirementRow[] }
 
 export function readOpportunity(row: CatalogRow): Opportunity {

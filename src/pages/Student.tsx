@@ -1,7 +1,7 @@
 import { ArrowRight, Bookmark, Check, Clock, X } from 'lucide-react'
 import { useId, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { ActionLink, Button, CategoryIcon, DemoNote, EmptyState, PageIntro, Status } from '../components/ui'
 import { formatDate, normalize, opportunityStatus } from '../features/eligibility'
 import { userMessage } from '../services/validation'
@@ -138,6 +138,8 @@ export function Saved() {
 export function Roadmap() {
   const { catalog, catalogState, workspace, completeAction } = useWorkspace()
   const [query, setQuery] = useSearchParams()
+  const location = useLocation()
+  const note = typeof location.state?.note === 'string' ? location.state.note : ''
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const current = workspace.roadmaps.find((item) => item.opportunityId === query.get('oportunidad')) ?? workspace.roadmaps[0]
@@ -161,15 +163,16 @@ export function Roadmap() {
   return <div className="container subpage narrow">
     <PageIntro label="Mi ruta" title={<>Construye tu camino <em>paso a paso.</em></>}>Una ruta de preparación para organizar tus próximos pasos y registrar tu avance.</PageIntro>
     {current ? <>
+      {note && <p className="quiet" role="status">{note}</p>}
       <DemoNote>{current.origin === 'deterministic' ? 'Ruta de preparación generada mediante reglas.' : 'Ruta de preparación generada con asistencia de IA.'}</DemoNote>
       <div className="surface roadmap-summary">
         <label className="field"><span>Tu oportunidad</span><select aria-label="Tu oportunidad" value={current.opportunityId} onChange={(event) => setQuery({ oportunidad: event.target.value })}>
           {workspace.roadmaps.map((item) => <option key={item.id} value={item.opportunityId}>{item.title}</option>)}
         </select></label>
-        <div><Status>{state}</Status><p>{completed} de {current.actions.length} acciones completadas</p></div>
+        <div><Status>{state}</Status><p>{completed} de {current.actions.length} acciones completadas</p><p className="quiet">Las duraciones son estimaciones.</p></div>
         <progress aria-label="Acciones completadas" value={completed} max={current.actions.length} />
       </div>
-      {['Vencida', 'Cerrada', 'No disponible'].includes(state) && <p className="quiet">Esta ruta sirve para prepararte para futuras convocatorias similares.</p>}
+      {['Vencida', 'Cerrada', 'No disponible'].includes(state) && <p className="quiet">Puedes usar esta ruta para prepararte para convocatorias similares. Una próxima edición depende de la institución.</p>}
       {error && <p className="error-text" role="alert">{error}</p>}
       <ol className="timeline">{current.actions.map((action) => <li className={`surface timeline-action ${action.completed ? 'timeline-action--done' : ''}`} key={action.id}>
         <div className="timeline-meta"><span className="chip">Prioridad {action.priority.toLowerCase()}</span><span><Clock size={15} /> {action.duration}</span></div>

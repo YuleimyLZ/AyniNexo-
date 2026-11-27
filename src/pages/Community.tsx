@@ -73,7 +73,7 @@ export function Contact() {
 
 export function Privacy() {
   return <div className="container subpage narrow">
-    <PageIntro label="Privacidad" title={<>Tus datos, <em>en tu navegador.</em></>} />
-    <div className="surface simple-panel prose-block"><p>El perfil académico, las oportunidades guardadas y las rutas se almacenan en Supabase y se asocian a tu cuenta. La persona administradora puede revisar los aportes que envíes. Tu navegador conserva la sesión necesaria para acceder a estos datos.</p><p>Las recomendaciones se calculan en tu navegador a partir de los intereses que escribes y del catálogo de convocatorias publicadas. Evita introducir documentos, información de contacto o datos personales sensibles.</p></div>
+    <PageIntro label="Privacidad" title={<>Cómo cuidamos <em>tus datos.</em></>} />
+    <div className="surface simple-panel prose-block"><p>El perfil académico, las oportunidades guardadas y las rutas se almacenan en Supabase y se asocian a tu cuenta. La persona administradora puede revisar los aportes que envíes. Tu navegador conserva la sesión necesaria para acceder a estos datos.</p><p>Mi Nexo conserva el historial en memoria durante la navegación. Si eliges usar el perfil académico, AyniNexo lo consulta para evaluar requisitos. En el piloto privado, Gemini recibe señales generales de búsqueda y datos públicos de las convocatorias. Evita incluir documentos o datos personales en tus mensajes.</p></div>
   </div>
 }
